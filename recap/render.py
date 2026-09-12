@@ -98,7 +98,17 @@ def mmss(seconds):
 
 
 def summarize(events):
-    """Every number the prompt needs, computed from the log alone."""
+    """Every number the prompt needs, computed from the log alone.
+
+    Only the most recent session counts: a log can hold several runs, either
+    because the local file accumulates them or because the server was
+    restarted mid-afternoon.
+    """
+    last_start = max((i for i, e in enumerate(events)
+                      if e.get("type") == "session_start"), default=None)
+    if last_start is not None and last_start:
+        print("log holds %d earlier events; using the last session only" % last_start, flush=True)
+        events = events[last_start:]
     chunks = [e for e in events if e.get("type") == "transcript_chunk" and (e.get("payload") or {}).get("words") is not None]
     scores = [e for e in events if e.get("type") == "audience_score"]
     cues = [e for e in events if e.get("type") == "cue"]

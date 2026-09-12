@@ -52,7 +52,10 @@ let showForMs = 15000;
 // Before the first cue the screen would otherwise be pure black, which reads as
 // broken. Say something true and calm instead until the metrics have caught up.
 const WARMUP_MS = 30000;
-const WARMUP_TEXT = "You're on. Warming up.";
+// Rotates every 10 s so the screen feels alive while the first metrics land.
+const WARMUP_TEXTS = ["Let's go. You've got this.",
+                      "Deep breath. Own the room.",
+                      "They came to hear you."];
 
 function mmss(seconds) {
   const negative = seconds < 0;
@@ -113,7 +116,10 @@ async function tick() {
     const early = (session.elapsed_s || 0) * 1000 < WARMUP_MS;
     cueEl.classList.toggle("warm", early);
     cueEl.classList.toggle("on", early);
-    if (early) cueEl.textContent = WARMUP_TEXT;
+    if (early) {
+      const i = Math.floor((session.elapsed_s || 0) / 10) % WARMUP_TEXTS.length;
+      cueEl.textContent = WARMUP_TEXTS[i];
+    }
   }
 
   drawEngagement((state.engagement && state.engagement.series) || []);

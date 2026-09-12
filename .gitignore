@@ -4,3 +4,5 @@ events.jsonl
 recap/out/
 __pycache__/
 node_modules/
+.venv/
+server/.venv/

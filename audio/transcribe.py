@@ -251,16 +251,17 @@ def run_mic(chunk_s=10.0, pipeline=None):
     per_chunk = int(chunk_s * SAMPLE_RATE) * 2  # bytes, 16-bit mono
     print("listening on default input (%s). Ctrl-C to stop."
           % sd.query_devices(kind="input")["name"], flush=True)
-    started = time.time()
-    buf = b""
+    buf, idx = b"", 0
     with sd.RawInputStream(samplerate=SAMPLE_RATE, channels=1, dtype="int16", callback=cb):
         try:
             while True:
                 buf += q.get()
                 if len(buf) >= per_chunk:
                     chunk, buf = buf[:per_chunk], buf[per_chunk:]
-                    end = time.time() - started
-                    pipe.handle(wav_bytes(chunk), max(0.0, end - chunk_s), end)
+                    # time is measured along the audio stream, not the wall clock,
+                    # so a slow Deepgram call never shifts the word timestamps
+                    pipe.handle(wav_bytes(chunk), idx * chunk_s, (idx + 1) * chunk_s)
+                    idx += 1
         except KeyboardInterrupt:
             print("\nstopped.", flush=True)
     return pipe

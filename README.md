@@ -43,13 +43,19 @@ cp .env.example .env            # fill in keys
 cd server && <start command>    # port 3000
 cloudflared tunnel --url http://localhost:3000
 # Adam's laptop
+make install                    # .venv + audio/recap deps
 export PODIUM_SERVER_URL=https://xxxx.trycloudflare.com
-python audio/transcribe.py --mic          # or: audio/capture.html in Chrome for Meet tab audio
+make hello                      # confirm the server logs an event before sending anything real
+make mic                        # laptop microphone, live
+make tab                        # Meet tab audio: then open http://localhost:3100 in Chrome
+python audio/transcribe.py demo/sample-talk.m4a   # a recorded file, 10-second chunks
 # Phones
 open https://xxxx.trycloudflare.com/presenter   # podium
 open https://xxxx.trycloudflare.com/audience    # back of room
 # Full pipeline with no live capture
-make demo
+make stub                       # stand-in for the server, port 3000, if Reed's isn't up
+make demo                       # replays the sample talk in real time
+make recap                      # builds recap/out/recap.html from the event log
 ```
 
 ## Cue priority

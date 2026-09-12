@@ -5,3 +5,4 @@ recap/out/
 __pycache__/
 node_modules/
 .venv/
+.ambi/

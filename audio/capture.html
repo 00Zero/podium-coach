@@ -1,0 +1,117 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Podium Coach — tab audio</title>
+<style>
+  body { background:#111; color:#eee; font:16px/1.5 -apple-system,system-ui,sans-serif; margin:0; padding:24px; }
+  h1 { font-size:20px; margin:0 0 4px; }
+  p.hint { color:#999; margin:0 0 20px; }
+  button { font:600 16px/1 inherit; padding:12px 18px; border:0; border-radius:8px; cursor:pointer; }
+  #go { background:#3ddc84; color:#062; }
+  #stop { background:#333; color:#eee; margin-left:8px; }
+  button:disabled { opacity:.4; cursor:default; }
+  #status { margin:18px 0; padding:10px 14px; border-radius:8px; background:#1c1c1c; }
+  #status.bad { background:#3a1616; color:#ffb4b4; }
+  #metrics { font-variant-numeric:tabular-nums; color:#8fd; margin-bottom:12px; }
+  #lines { white-space:pre-wrap; }
+  .line { padding:6px 0; border-top:1px solid #222; }
+  .t { color:#666; font-variant-numeric:tabular-nums; margin-right:8px; }
+</style>
+
+<h1>Podium Coach — Google Meet tab audio</h1>
+<p class="hint">Pick the <b>Chrome Tab</b> with the Meet in it and tick <b>Share tab audio</b>. 10-second chunks, transcribed and posted as <code>transcript_chunk</code>.</p>
+
+<button id="go">Share the Meet tab</button>
+<button id="stop" disabled>Stop</button>
+
+<div id="status">Not capturing.</div>
+<div id="metrics"></div>
+<div id="lines"></div>
+
+<script>
+const CHUNK_MS = 10000;
+const go = document.getElementById('go'), stop = document.getElementById('stop');
+const statusEl = document.getElementById('status'), metricsEl = document.getElementById('metrics');
+const lines = document.getElementById('lines');
+let stream = null, recorder = null, running = false, index = 0;
+
+function say(msg, bad) { statusEl.textContent = msg; statusEl.className = bad ? 'bad' : ''; }
+
+function addLine(start, end, text) {
+  const d = document.createElement('div');
+  d.className = 'line';
+  d.innerHTML = '<span class="t">' + start.toFixed(0) + '–' + end.toFixed(0) + 's</span>';
+  d.appendChild(document.createTextNode(text || '(silence)'));
+  lines.prepend(d);
+}
+
+// One MediaRecorder per chunk: every blob is then a complete webm file that
+// Deepgram can decode on its own. A single recorder with a timeslice would
+// emit headerless fragments after the first.
+function recordOne(track) {
+  return new Promise(resolve => {
+    const parts = [];
+    recorder = new MediaRecorder(new MediaStream([track]), { mimeType: 'audio/webm;codecs=opus' });
+    recorder.ondataavailable = e => { if (e.data.size) parts.push(e.data); };
+    recorder.onstop = () => resolve(new Blob(parts, { type: 'audio/webm' }));
+    recorder.start();
+    setTimeout(() => recorder.state !== 'inactive' && recorder.stop(), CHUNK_MS);
+  });
+}
+
+async function sendChunk(blob, start, end) {
+  const fd = new FormData();
+  fd.append('audio', blob, 'chunk.webm');
+  fd.append('start', start);
+  fd.append('end', end);
+  try {
+    const r = await fetch('/chunk', { method: 'POST', body: fd });
+    const j = await r.json();
+    addLine(start, end, j.text);
+    if (j.metrics) {
+      metricsEl.textContent = 'wpm ' + j.metrics.wpm_60s +
+        '  ·  fillers ' + j.metrics.fillers_per_min + '/min' +
+        '  ·  since pause ' + j.metrics.seconds_since_pause + 's';
+    }
+  } catch (e) {
+    say('Chunk failed to post (' + e.message + '). Still capturing.', true);
+  }
+}
+
+async function loop(track) {
+  while (running && track.readyState === 'live') {
+    const i = index++;
+    const blob = await recordOne(track);
+    if (!running) break;
+    sendChunk(blob, i * CHUNK_MS / 1000, (i + 1) * CHUNK_MS / 1000);  // don't await: keep recording
+  }
+  if (running) { running = false; say('The shared tab stopped sharing.', true); reset(); }
+}
+
+function reset() { go.disabled = false; stop.disabled = true; }
+
+go.onclick = async () => {
+  try {
+    stream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: true });
+  } catch (e) { return say('Screen share cancelled or blocked: ' + e.message, true); }
+
+  const track = stream.getAudioTracks()[0];
+  if (!track) {
+    stream.getTracks().forEach(t => t.stop());
+    return say('No audio track. Re-share and tick "Share tab audio" (Chrome tab shares only).', true);
+  }
+  await fetch('/start', { method: 'POST', body: new FormData() });
+  running = true; index = 0;
+  go.disabled = true; stop.disabled = false;
+  say('Capturing tab audio in 10-second chunks.');
+  loop(track);
+};
+
+stop.onclick = async () => {
+  running = false;
+  if (recorder && recorder.state !== 'inactive') recorder.stop();
+  if (stream) stream.getTracks().forEach(t => t.stop());
+  await fetch('/end', { method: 'POST' });
+  say('Stopped. session_end posted.');
+  reset();
+};
+</script>

@@ -270,7 +270,17 @@ async def get_events(since: str | None = None) -> list[dict[str, Any]]:
     """The event log, minus frame bytes. The recap page calls this once at /end."""
     cutoff = parse_ts(since) if since else None
     return [
-        {"type": r["type"], "ts": r["ts"], "payload": r["payload"]}
+        {
+            "type": r["type"],
+            "ts": r["ts"],
+            # t is seconds since session_start, computed here so senders never do it.
+            # Required by docs/CONTRACT.md; the recap joins engagement scores to the
+            # transcript on it.
+            "t": round(max(0.0, (r["at"] - SESSION_START).total_seconds()), 2)
+            if SESSION_START
+            else None,
+            "payload": r["payload"],
+        }
         for r in EVENTS
         if cutoff is None or r["at"] >= cutoff
     ]

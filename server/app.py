@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
 import cues
+import scoring
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CUES_PATH = REPO_ROOT / "config" / "cues.json"
@@ -118,7 +119,43 @@ def append_event(event: Event) -> dict[str, Any]:
     if image_b64 is not None:
         detail = f"image_b64 {len(image_b64)} chars | {detail}"
     print(f"[{when.isoformat()}] {event.type}: {detail}")
+
+    if event.type == "audience_frame" and image_b64:
+        schedule_scoring(image_b64)
+
     return record
+
+
+# One scoring call in flight at a time. Frames arrive every 30 s and a call takes a
+# couple of seconds, so a backlog means something is wrong; dropping the newer frame
+# is better than queueing stale ones behind it.
+SCORING: asyncio.Task[None] | None = None
+
+
+def schedule_scoring(image_b64: str) -> None:
+    """Score a frame in the background. The bytes never leave this call chain."""
+    global SCORING
+    if SCORING is not None and not SCORING.done():
+        print("[score] previous scoring still running, frame dropped")
+        return
+    try:
+        SCORING = asyncio.create_task(score_and_append(image_b64))
+    except RuntimeError:  # no running loop, e.g. under a sync test client
+        print("[score] no event loop, frame dropped unscored")
+
+
+async def score_and_append(image_b64: str) -> None:
+    """Score the frame and append an audience_score event through the same path."""
+    payload = await scoring.score_frame(image_b64)
+    if payload is None:
+        return
+    append_event(
+        Event(
+            type="audience_score",
+            ts=datetime.now(timezone.utc).isoformat(),
+            payload=payload,
+        )
+    )
 
 
 def elapsed_s() -> float:

@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Podium Coach — audience</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; background: #0b0b0d; color: #f2f2f4;
+    font: 16px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: center; gap: 16px;
+    padding: 20px 16px calc(20px + env(safe-area-inset-bottom));
+  }
+  h1 { font-size: 15px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+       color: #8b8b96; margin: 4px 0 0; }
+  video { width: 100%; max-width: 480px; border-radius: 14px; background: #000; aspect-ratio: 4/3;
+          object-fit: cover; }
+  button {
+    width: 100%; max-width: 480px; padding: 22px; font-size: 22px; font-weight: 600;
+    color: #0b0b0d; background: #f2f2f4; border: 0; border-radius: 14px; cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:disabled { opacity: .35; }
+  .stats { width: 100%; max-width: 480px; display: flex; gap: 10px; }
+  .stat { flex: 1; background: #16161a; border-radius: 12px; padding: 12px 14px; }
+  .stat .label { font-size: 11px; letter-spacing: .07em; text-transform: uppercase; color: #7c7c88; }
+  .stat .value { font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  #note { width: 100%; max-width: 480px; min-height: 2.8em; color: #a9a9b6; font-size: 14px; }
+  #status { width: 100%; max-width: 480px; font-size: 13px; color: #7c7c88; font-variant-numeric: tabular-nums; }
+  .bad { color: #ff6b6b; }
+</style>
+</head>
+<body>
+  <h1>Audience camera</h1>
+  <video id="v" autoplay muted playsinline></video>
+  <button id="go">Start monitoring</button>
+  <div class="stats">
+    <div class="stat"><div class="label">Frames sent</div><div class="value" id="sent">0</div></div>
+    <div class="stat"><div class="label">Engagement</div><div class="value" id="score">—</div></div>
+  </div>
+  <div id="note"></div>
+  <div id="status">Tap Start. Keep this tab open, screen on, Auto-Lock off.</div>
+<script>
+const FRAME_INTERVAL_MS = 30000;   // one frame per 30 s, per docs/AUDIENCE-PAGE.md
+const FRAME_WIDTH = 640;
+const JPEG_QUALITY = 0.7;
+
+const video = document.getElementById("v");
+const startBtn = document.getElementById("go");
+const sentEl = document.getElementById("sent");
+const scoreEl = document.getElementById("score");
+const noteEl = document.getElementById("note");
+const statusEl = document.getElementById("status");
+
+let sent = 0;
+let failures = 0;
+
+function setStatus(text, bad) {
+  statusEl.textContent = text;
+  statusEl.className = bad ? "bad" : "";
+}
+
+// Safari suspends a backgrounded or locked page, which silently stops the frames.
+async function keepAwake() {
+  try {
+    const lock = await navigator.wakeLock.request("screen");
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") keepAwake();
+    });
+    return lock;
+  } catch (err) {
+    setStatus("Wake lock unavailable — set Auto-Lock to Never.", true);
+  }
+}
+
+function grabFrame() {
+  const canvas = document.createElement("canvas");
+  const ratio = video.videoHeight / video.videoWidth || 0.75;
+  canvas.width = FRAME_WIDTH;
+  canvas.height = Math.round(FRAME_WIDTH * ratio);
+  canvas.getContext("2d").drawImage(video, 0, 0, canvas.width, canvas.height);
+  return new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", JPEG_QUALITY));
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => resolve(String(reader.result).split(",")[1]);
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function sendFrame() {
+  if (video.readyState < 2) return;             // nothing decoded yet, skip this tick
+  try {
+    const blob = await grabFrame();
+    if (!blob) return;
+    const image_b64 = await blobToBase64(blob);
+    const res = await fetch("/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        type: "audience_frame",
+        ts: new Date().toISOString(),
+        payload: {
+          image_b64,
+          width: 640,
+          height: Math.round(640 * (video.videoHeight / video.videoWidth || 0.75)),
+          source: "iphone-rear"
+        }
+      })
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    sent += 1;
+    failures = 0;
+    sentEl.textContent = sent;
+    setStatus("Last frame " + new Date().toLocaleTimeString() + " · " + Math.round(blob.size / 1024) + " KB");
+  } catch (err) {
+    // A failed post is never fatal: the page keeps trying on the next tick.
+    failures += 1;
+    setStatus("Send failed (" + failures + "). Still trying. " + err.message, true);
+  }
+}
+
+// Show the score the server came back with, so a glance confirms the loop is alive.
+async function pollScore() {
+  try {
+    const res = await fetch("/state");
+    const state = await res.json();
+    const latest = state.engagement && state.engagement.latest;
+    scoreEl.textContent = latest === null || latest === undefined ? "—" : latest;
+    const series = (state.engagement && state.engagement.series) || [];
+    const last = series[series.length - 1];
+    if (last && last.note) noteEl.textContent = last.note;
+  } catch (err) {
+    /* the counter is cosmetic; never let it interrupt sending */
+  }
+}
+
+startBtn.addEventListener("click", async () => {
+  startBtn.disabled = true;
+  startBtn.textContent = "Monitoring…";
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 } },
+      audio: false
+    });
+    video.srcObject = stream;
+    await video.play();
+  } catch (err) {
+    startBtn.disabled = false;
+    startBtn.textContent = "Start monitoring";
+    setStatus("Camera blocked: " + err.message + " — must be the https tunnel URL.", true);
+    return;
+  }
+  keepAwake();
+  setStatus("Camera on. First frame in a moment.");
+  setTimeout(sendFrame, 1500);
+  setInterval(sendFrame, FRAME_INTERVAL_MS);
+  setInterval(pollScore, 5000);
+});
+</script>
+</body>
+</html>

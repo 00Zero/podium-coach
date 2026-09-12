@@ -6,21 +6,53 @@ Frame bytes (`image_b64`) are dropped from the log and never written anywhere.
 
 from __future__ import annotations
 
+import asyncio
 import json
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+
+import cues
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CUES_PATH = REPO_ROOT / "config" / "cues.json"
+STATIC = Path(__file__).resolve().parent / "static"
+
+# override=True: an empty ANTHROPIC_API_KEY exported by a parent shell would
+# otherwise win silently and send every cue down the fallback path.
+load_dotenv(REPO_ROOT / ".env", override=True)
 
 # Degradation rule from the contract: metrics go null after this long with no chunk.
 METRICS_STALE_S = 30.0
 
-app = FastAPI(title="Podium Coach")
+def emit_cue(category: str, text: str, reason: str) -> None:
+    """Route a server-generated cue through the same append path as posted events."""
+    append_event(
+        Event(
+            type="cue",
+            ts=datetime.now(timezone.utc).isoformat(),
+            payload={"category": category, "text": text, "reason": reason},
+        )
+    )
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """Start the cue loop with the server and cancel it on shutdown."""
+    task = asyncio.create_task(cues.run_loop(build_state, load_cue_config, emit_cue))
+    key = "present" if __import__("os").environ.get("ANTHROPIC_API_KEY") else "MISSING"
+    print(f"[startup] cue loop running | ANTHROPIC_API_KEY {key}")
+    yield
+    task.cancel()
+
+
+app = FastAPI(title="Podium Coach", lifespan=lifespan)
 
 
 class Event(BaseModel):
@@ -72,10 +104,15 @@ def append_event(event: Event) -> dict[str, Any]:
     }
     EVENTS.append(record)
 
-    # Any event starts the clock if session_start never arrived, so the countdown
-    # on the podium phone is never dead. Deliberate extension of the contract.
-    if SESSION_START is None:
+    # A real session_start always sets the clock, and corrects one started by a
+    # stray event. Otherwise the first event of any kind starts it from SERVER
+    # receipt time, not the sender's ts: a canned curl with a hardcoded stale
+    # timestamp would otherwise start the talk in the past. Deliberate extension
+    # of docs/CONTRACT.md.
+    if event.type == "session_start":
         SESSION_START = when
+    elif SESSION_START is None:
+        SESSION_START = datetime.now(timezone.utc)
 
     detail = json.dumps(payload)[:160]
     if image_b64 is not None:
@@ -146,6 +183,7 @@ def engagement_state() -> dict[str, Any]:
             if SESSION_START
             else 0.0,
             "score": r["payload"].get("engagement"),
+            "note": r["payload"].get("note"),
         }
         for r in EVENTS
         if r["type"] == "audience_score"
@@ -201,9 +239,8 @@ async def get_events(since: str | None = None) -> list[dict[str, Any]]:
     ]
 
 
-@app.get("/state")
-async def get_state() -> dict[str, Any]:
-    """What the presenter page polls every 2 s."""
+def build_state() -> dict[str, Any]:
+    """The /state payload. Shared by the HTTP route and the cue loop."""
     elapsed = elapsed_s()
     current_section, over_by, planned_minutes = outline_state(elapsed)
     remaining = (
@@ -224,6 +261,12 @@ async def get_state() -> dict[str, Any]:
     }
 
 
+@app.get("/state")
+async def get_state() -> dict[str, Any]:
+    """What the presenter page polls every 2 s."""
+    return build_state()
+
+
 @app.get("/health")
 async def health() -> dict[str, Any]:
     """Fastest way to confirm the server is up over the tunnel without sending an event."""
@@ -238,3 +281,15 @@ async def reset() -> dict[str, Any]:
     SESSION_START = None
     print("[reset] state cleared")
     return {"ok": True}
+
+
+@app.get("/audience")
+async def audience_page() -> FileResponse:
+    """Camera page for the iPhone at the back of the room. See docs/AUDIENCE-PAGE.md."""
+    return FileResponse(STATIC / "audience.html", media_type="text/html")
+
+
+@app.get("/presenter")
+async def presenter_page() -> FileResponse:
+    """The podium phone: countdown, one cue, a thin engagement line. Nothing else."""
+    return FileResponse(STATIC / "presenter.html", media_type="text/html")

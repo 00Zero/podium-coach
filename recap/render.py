@@ -172,8 +172,14 @@ def summarize(events):
         "longest_no_pause_at": mmss(best[1]),
         "cues": [{"at": mmss(at_t(c)), "category": (c.get("payload") or {}).get("category"),
                   "text": (c.get("payload") or {}).get("text")} for c in cues],
+        # A frame the model could not read (too dark, pointed at a desk) scores
+        # null. Those are not zero engagement, they are no measurement: drop them
+        # rather than draw them as a dip the presenter never caused.
         "engagement": [{"t": at_t(s), "score": (s.get("payload") or {}).get("engagement"),
-                        "note": (s.get("payload") or {}).get("note", "")} for s in scores],
+                        "note": (s.get("payload") or {}).get("note", "")} for s in scores
+                       if (s.get("payload") or {}).get("engagement") is not None],
+        "unreadable_frames": sum(1 for s in scores
+                                 if (s.get("payload") or {}).get("engagement") is None),
     }
 
 

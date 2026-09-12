@@ -43,7 +43,8 @@
   <div id="note"></div>
   <div id="status">Tap Start. Keep this tab open, screen on, Auto-Lock off.</div>
 <script>
-const FRAME_INTERVAL_MS = 30000;   // one frame per 30 s, per docs/AUDIENCE-PAGE.md
+const FRAME_INTERVAL_MS = 15000;   // one frame per 15 s. Scoring takes 7-14 s, so
+                                   // anything faster starts dropping frames in flight.
 const FRAME_WIDTH = 640;
 const JPEG_QUALITY = 0.7;
 

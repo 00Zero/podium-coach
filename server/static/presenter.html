@@ -19,6 +19,8 @@
     opacity: 0; transition: opacity .25s ease;
   }
   #cue.on { opacity: 1; }
+  /* The warm-up line is not a cue: smaller and grey, so a real cue still lands. */
+  #cue.warm { font-size: 40px; font-weight: 600; color: #6e6e78; }
   #bottom { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
   #clock { font-size: 40px; font-weight: 600; font-variant-numeric: tabular-nums; }
   #clock.over { color: #ff4d4d; }
@@ -47,6 +49,10 @@ const deadEl = document.getElementById("dead");
 let shownAt = 0;
 let shownText = "";
 let showForMs = 15000;
+// Before the first cue the screen would otherwise be pure black, which reads as
+// broken. Say something true and calm instead until the metrics have caught up.
+const WARMUP_MS = 30000;
+const WARMUP_TEXT = "You're on. Warming up.";
 
 function mmss(seconds) {
   const negative = seconds < 0;
@@ -95,12 +101,19 @@ async function tick() {
     shownText = cue.text;
     shownAt = Date.now();
     cueEl.textContent = cue.text;
+    cueEl.classList.remove("warm");
     cueEl.classList.add("on");
     if (navigator.vibrate) navigator.vibrate(40);
   }
   if (shownText && Date.now() - shownAt > showForMs) {
     cueEl.classList.remove("on");
     shownText = "";
+  }
+  if (!shownText) {
+    const early = (session.elapsed_s || 0) * 1000 < WARMUP_MS;
+    cueEl.classList.toggle("warm", early);
+    cueEl.classList.toggle("on", early);
+    if (early) cueEl.textContent = WARMUP_TEXT;
   }
 
   drawEngagement((state.engagement && state.engagement.series) || []);

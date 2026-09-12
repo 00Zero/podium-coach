@@ -1,0 +1,6 @@
+.env
+audio/events.local.jsonl
+events.jsonl
+recap/out/
+__pycache__/
+node_modules/

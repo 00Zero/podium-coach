@@ -1,0 +1,62 @@
+{
+  "_comment": "Cue policy. Code picks the category by priority order (first match wins). The model only writes the words, max 6. If the model call fails, fallback_text is shown. Adam owns this file; Reed's cue loop reads it.",
+  "loop_interval_s": 15,
+  "window_s": 60,
+  "max_words": 6,
+  "show_cue_for_s": 15,
+  "priority": ["time_over", "time_warning", "section_drift", "pace_fast", "fillers", "audience_drop", "no_pause", "pace_slow"],
+  "categories": {
+    "time_over": {
+      "condition": "elapsed_s > planned_minutes*60",
+      "fallback_text": "Over time. Wrap up.",
+      "examples": ["Over time. Land it.", "Close now. One sentence."]
+    },
+    "time_warning": {
+      "condition": "remaining_s <= 60",
+      "fallback_text": "One minute left.",
+      "examples": ["One minute. Go to ask.", "60 seconds. Skip demo."]
+    },
+    "section_drift": {
+      "condition": "section_over_by_s > 60",
+      "fallback_text": "Move to next section.",
+      "examples": ["Skip architecture. Two min left.", "Move on to pricing."]
+    },
+    "pace_fast": {
+      "condition": "wpm_60s > 165",
+      "fallback_text": "Slow down.",
+      "examples": ["Slow down. 172 wpm.", "Breathe. Slower."]
+    },
+    "fillers": {
+      "condition": "fillers_per_min > 4",
+      "fallback_text": "Pause instead of um.",
+      "examples": ["Pause, don't um.", "Silence beats filler."]
+    },
+    "audience_drop": {
+      "condition": "engagement.latest <= 2 AND engagement dropped >= 2 points over last 90 s",
+      "fallback_text": "Ask them a question.",
+      "examples": ["Ask the room something.", "Losing them. Change gear."]
+    },
+    "no_pause": {
+      "condition": "seconds_since_pause > 45",
+      "fallback_text": "Pause.",
+      "examples": ["Pause. Let it land.", "Stop. Two seconds."]
+    },
+    "pace_slow": {
+      "condition": "wpm_60s < 105 AND elapsed_s > 60",
+      "fallback_text": "Pick up the pace.",
+      "examples": ["Pick it up.", "Faster. You're dragging."]
+    }
+  },
+  "thresholds": {
+    "wpm_fast": 165,
+    "wpm_slow": 105,
+    "fillers_per_min": 4,
+    "pause_gap_s": 1.5,
+    "no_pause_s": 45,
+    "section_drift_s": 60,
+    "engagement_drop_points": 2,
+    "engagement_drop_window_s": 90,
+    "engagement_low": 2
+  },
+  "filler_words": ["um", "uh", "like", "you know", "sort of", "kind of", "basically", "actually", "right?", "okay so"]
+}

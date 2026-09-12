@@ -23,6 +23,8 @@ It coaches from the context of the room, so, um, right now it's hearing me throu
 
 Nine seconds into my last run it said "Slow down. 174 wpm." It was right.
 
+Under the hood: OpenAI transcription models through OpenRouter, Claude Haiku scoring the room, Claude Sonnet writing the cues and the recap. And we used Ambiguous AI to coordinate our coding agents across two locally hosted projects.
+
 **[Ask — 1:15–1:30]**
 
 And when I stop, it tells me which thirty seconds you actually cared about and what I was saying right then — which you, uh, cannot get from a chatbox, because it requires having been here. So the ask is simple. If you give talks, try it. If you organize events, put a phone on the podium. And if you're a judge, this is the part where you lean in. Thanks.

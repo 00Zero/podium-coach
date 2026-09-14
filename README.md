@@ -1,6 +1,8 @@
 # Podium Coach
 
-An agent that lives on the podium. A phone next to the presenter shows a countdown and, at most every 15 seconds, one cue of six words or fewer: *"Skip architecture. Two minutes left."* It listens to the presenter through the Google Meet they're presenting in, and watches the audience through a phone at the back of the room. When the talk ends, the presenter gets a recap: what landed, what to improve, and where the audience was most engaged — with what was being said at that moment.
+Public speaking can be terrifying. Nervous speakers can talk too fast, avoid eye contact, and lose track of time. Often they cannot notice their audience's reactions while they speak. They cannot hear their own filler words. Podium Coach helps with this by giving speakers real-time feedback on two things that matter: how fast they are talking and whether their audience is engaged.
+
+An audience-facing camera watches the audience and notices when attention drops. Audio from the speaker is analyzed to measure pace and filler words. A speaker-facing web app offers the speaker one simple cue at a time, designed to help improve the effectiveness of the presentation.
 
 Built in four hours at the AI Tinkerers *Agents, Everywhere* global hackathon, Seattle, September 12, 2026, by Reed O'Beirne and Adam Burgh.
 

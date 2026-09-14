@@ -106,6 +106,16 @@ def to_wav_file(path):
 
 # ---------------------------------------------------------- transcription
 
+PROVIDER = os.environ.get("PODIUM_TRANSCRIBER", "deepgram")
+
+
+def transcribe(audio, content_type="audio/wav"):
+    """Route to the configured provider; Deepgram by default."""
+    if PROVIDER in ("openrouter", "openai"):
+        return openai_words(audio, content_type)
+    return deepgram_words(audio, content_type)
+
+
 def deepgram_words(audio, content_type="audio/wav"):
     """-> (text, [{w, start, end, punctuated}]). Returns ('', []) on failure."""
     key = os.environ.get("DEEPGRAM_API_KEY")
@@ -131,17 +141,29 @@ def deepgram_words(audio, content_type="audio/wav"):
 
 
 def openai_words(audio, content_type="audio/wav"):
-    """Fallback only, and only if OPENAI_API_KEY is set."""
-    key = os.environ.get("OPENAI_API_KEY")
+    """OpenAI transcription, through OpenRouter when a key for it is present.
+
+    OpenRouter exposes an OpenAI-compatible multipart /audio/transcriptions
+    endpoint, so the only differences are the base URL, the bearer key, and the
+    namespaced model slug. Prefer it when OPENROUTER_API_KEY is set; fall back to
+    OpenAI directly; do nothing if neither key exists.
+    """
+    or_key = os.environ.get("OPENROUTER_API_KEY")
+    if or_key:
+        url = "https://openrouter.ai/api/v1/audio/transcriptions"
+        key, model, via = or_key, "openai/whisper-1", "openrouter"
+    else:
+        url = "https://api.openai.com/v1/audio/transcriptions"
+        key, model, via = os.environ.get("OPENAI_API_KEY"), "whisper-1", "openai"
     if not key:
         return "", []
     ext = "webm" if "webm" in content_type else "wav"
     try:
         r = requests.post(
-            "https://api.openai.com/v1/audio/transcriptions",
+            url,
             headers={"Authorization": "Bearer " + key},
             files={"file": ("chunk." + ext, audio, content_type)},
-            data=[("model", "whisper-1"), ("response_format", "verbose_json"),
+            data=[("model", model), ("response_format", "verbose_json"),
                   ("timestamp_granularities[]", "word"),
                   ("prompt", "Um, uh, like, you know, so, okay so...")],
             timeout=30,
@@ -150,10 +172,10 @@ def openai_words(audio, content_type="audio/wav"):
         j = r.json()
         words = [{"w": w["word"], "start": float(w["start"]), "end": float(w["end"]),
                   "punctuated": w["word"]} for w in j.get("words", [])]
-        print("used openai fallback", flush=True)
+        print("transcribed via %s (%s)" % (via, model), flush=True)
         return j.get("text", ""), words
     except Exception as e:
-        print("openai fallback failed, continuing:", e, flush=True)
+        print("%s transcription failed, continuing: %s" % (via, e), flush=True)
         return "", []
 
 
@@ -168,7 +190,7 @@ class ChunkPipeline:
         self.verbose = verbose
 
     def handle(self, audio, chunk_start, chunk_end, content_type="audio/wav"):
-        text, words = deepgram_words(audio, content_type)
+        text, words = transcribe(audio, content_type)
         for w in words:                      # Deepgram times are chunk-relative
             w["start"] = round(w["start"] + chunk_start, 2)
             w["end"] = round(w["end"] + chunk_start, 2)

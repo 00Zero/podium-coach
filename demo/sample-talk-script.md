@@ -2,6 +2,8 @@
 
 Read this out loud at a slightly-too-fast pace. Include the fillers as written. Do not pause during the "no pause" block. This gives the metrics something to catch.
 
+Written to hit the four judging criteria: a working agent in a real environment (1), an environment that changes what the agent can do (2), deterministic control and failure handling (3), and a presenter who stays in control (4).
+
 Outline for `demo/sample-outline.txt`:
 ```
 Why this matters (0.5)
@@ -13,12 +15,16 @@ Ask (0.25)
 
 **[Why this matters — 0:00–0:30]**
 
-So, um, thanks for having me. I've been to more than thirty AI Tinkerers events, and I run my own, and between them I've watched, like, hundreds of people give talks. And the thing is, nobody on stage can see the clock. They can't see the room. They definitely can't hear themselves say "um" fourteen times. The organizer waves from the back and it changes nothing. So we built something that sits on the podium.
+So, um, thanks for having me. I've been to, like, thirty AI Tinkerers events, and I run my own, and I've watched hundreds of people give talks. And nobody on stage can see the clock. They can't see the room. They definitely can't hear themselves say "um" fourteen times. The organizer waves from the back and it changes nothing. And a chatbox can't help you here — not because it isn't smart, but because it wasn't in the room. So we put the agent on the podium.
 
 **[Demo — 0:30–1:15] (no pauses, run it together)**
 
-It's an agentic coach that sits on the podium and gives you cues based on the context of your presentation and the engagement of your audience, so right now it would be showing me a countdown and maybe a cue and the cue is six words max because you can only read six words at a glance from a podium and the audio comes from the Google Meet tab which means no bots and no APIs and there's a second phone pointed at you all which scores how many of you are looking up versus at your laptops and actually that's the part I'm most excited about because it means the recap afterwards can tell me which thirty seconds of this talk you actually cared about and, um, which thirty seconds you checked Slack.
+It coaches from the context of the room, so, um, right now it's hearing me through the Google Meet tab and a second phone is pointed at you all scoring how many of you are looking up versus on your laptops, and it shows me a countdown and one cue, six words max, because six words is all you can read at a glance while you're still talking, and here's the part I actually care about — code decides *when* to speak, not the model. Words per minute, fillers, seconds since I paused, how far off my outline I am. Those thresholds are in a config file you can open and read. The model only picks the words, and if that call fails, a fixed line shows instead, so the phone never, you know, shows me an error mid-sentence.
+
+Nine seconds into my last run it said "Slow down. 174 wpm." It was right.
+
+Under the hood: OpenAI transcription models through OpenRouter, Claude Haiku scoring the room, Claude Sonnet writing the cues and the recap. And we used Ambiguous AI to coordinate our coding agents across two locally hosted projects.
 
 **[Ask — 1:15–1:30]**
 
-So, uh, the ask is simple. If you give talks, try it. If you organize events, put a phone on the podium. And if you're a judge — this is the part where you lean in. Thanks.
+And when I stop, it tells me which thirty seconds you actually cared about and what I was saying right then — which you, uh, cannot get from a chatbox, because it requires having been here. So the ask is simple. If you give talks, try it. If you organize events, put a phone on the podium. And if you're a judge, this is the part where you lean in. Thanks.

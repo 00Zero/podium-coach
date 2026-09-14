@@ -8,7 +8,9 @@ Built in four hours at the AI Tinkerers *Agents, Everywhere* global hackathon, S
 
 ## Why the environment matters
 
-<!-- Adam: two paragraphs. Nobody on stage can see the clock, the room, or their own filler words. A chatbox can't either, because it wasn't in the room. The value comes from four things at once: the countdown, the outline, the presenter's own voice, and the audience's attention. -->
+Nobody on stage can see the clock, the room, or their own filler words. You are the one person in the building who cannot watch yourself present. The organizer waving from the back conveys one bit of information, badly, and always too late. Every tool built for this problem either coaches you before the talk or grades you after it — the two moments when you can do nothing about it.
+
+A chatbox cannot help here, and not because it isn't smart. It wasn't in the room. The value of this agent comes from four things being true at once, and all four are properties of the environment rather than the model: the countdown against a plan you wrote, the words coming out of your mouth right now, the attention of the people in front of you, and a screen you can read in one glance without breaking eye contact. Take away the room and there is nothing left to coach. That is the whole argument for putting the agent on the podium instead of behind a prompt.
 
 ## Architecture
 
@@ -37,7 +39,6 @@ Code decides *when* to speak (deterministic metrics: WPM, fillers per minute, se
 
 ## Running it
 
-<!-- Reed: fill in once the server exists. -->
 
 ```
 cp .env.example .env            # fill in keys
@@ -93,4 +94,10 @@ Audience frames are sampled once every 30 seconds, sent to a vision model with a
 
 ## Sponsors used
 
-<!-- Fill at the end, honestly: Claude (Haiku vision, Sonnet cues + recap), Deepgram, OpenRouter/OpenAI if used, Cloud Run if deployed. -->
+- **Anthropic Claude** — Haiku 4.5 scores each audience frame against a fixed rubric; Sonnet 5 writes every cue (≤6 words) and the post-talk recap. Both are called with tool use so the JSON is schema-valid.
+- **Deepgram** — `nova-3` with `filler_words=true` and word timestamps. The primary transcription path; every chunk in every run today went through it.
+- **OpenRouter** — `openai/whisper-1` over OpenRouter's OpenAI-compatible `/audio/transcriptions` endpoint, as the transcription failover. Set `OPENROUTER_API_KEY` and `PODIUM_TRANSCRIBER=openrouter` to route through it.
+- **Ambiguous AI** — coordinating our coding agents across the two locally hosted halves of this repo.
+- **Cloudflare Tunnel** — HTTPS for the two phones. Required: iOS will not grant camera access over plain HTTP.
+
+Not used, and deliberately cut: CopilotKit, meeting bots, the Google Meet Media API, Cloud Run, any database or auth.
